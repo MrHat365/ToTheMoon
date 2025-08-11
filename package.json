@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "init-db": "npx tsx scripts/init-db.ts",
+    "init-db": "npx tsx scripts/db-init.ts",
     "test-exchanges": "npx tsx scripts/test-exchanges.ts"
   },
   "dependencies": {
