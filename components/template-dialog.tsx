@@ -7,9 +7,9 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { PlusCircle, XCircle } from "lucide-react"
 import { useMediaQuery } from "@/hooks/use-media-query"
+import { useExchanges } from "@/hooks/use-exchanges"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface Account {
@@ -29,8 +29,6 @@ interface ControlConfig {
 interface Template {
   id: string
   name: string
-  status: "enabled" | "disabled"
-  runningStatus: "running" | "stopped" // Not editable in dialog
   activeControl: ControlConfig
   passiveControl: ControlConfig
 }
@@ -47,21 +45,23 @@ const initialAccount: Account = { id: "", name: "", apiKey: "", secretKey: "", p
 
 export default function TemplateDialog({ isOpen, onClose, onSave, initialData }: TemplateDialogProps) {
   const isDesktop = useMediaQuery("(min-width: 768px)")
+  const { exchanges, loading: exchangesLoading, error: exchangesError } = useExchanges()
+  
   const [templateName, setTemplateName] = useState("")
-  const [templateStatus, setTemplateStatus] = useState(true) // true for enabled, false for disabled
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
 
-  const [activeExchange, setActiveExchange] = useState("Binance")
+  const [activeExchange, setActiveExchange] = useState("")
   const [activeAccounts, setActiveAccounts] = useState<Account[]>([initialAccount])
   const [activeExecutionMode, setActiveExecutionMode] = useState<"loop" | "random">("loop")
 
-  const [passiveExchange, setPassiveExchange] = useState("Binance")
+  const [passiveExchange, setPassiveExchange] = useState("")
   const [passiveAccounts, setPassiveAccounts] = useState<Account[]>([initialAccount])
   const [passiveExecutionMode, setPassiveExecutionMode] = useState<"loop" | "random">("loop")
 
   useEffect(() => {
     if (initialData) {
       setTemplateName(initialData.name)
-      setTemplateStatus(initialData.status === "enabled")
       setActiveExchange(initialData.activeControl.exchange)
       // 确保加载时账户有 name 字段，如果旧数据没有则给空字符串
       setActiveAccounts(
@@ -79,17 +79,26 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
       )
       setPassiveExecutionMode(initialData.passiveControl.executionMode)
     } else {
-      // Reset form for new template
+      // Reset form for new template - 只有在有交易所数据时才重置
       setTemplateName("")
-      setTemplateStatus(true)
-      setActiveExchange("Binance")
+      if (exchanges.length > 0) {
+        setActiveExchange(exchanges[0])
+        setPassiveExchange(exchanges[0])
+      }
       setActiveAccounts([initialAccount])
       setActiveExecutionMode("loop")
-      setPassiveExchange("Binance")
       setPassiveAccounts([initialAccount])
       setPassiveExecutionMode("loop")
     }
-  }, [initialData, isOpen]) // Reset when dialog opens or initialData changes
+  }, [initialData, isOpen]) // 移除defaultExchange依赖避免循环
+
+  // 当交易所列表加载完成且没有初始数据时，设置默认交易所
+  useEffect(() => {
+    if (!initialData && exchanges.length > 0 && !exchangesLoading) {
+      setActiveExchange(exchanges[0])
+      setPassiveExchange(exchanges[0])
+    }
+  }, [exchanges, exchangesLoading, initialData])
 
   const handleAddAccount = (controlType: "active" | "passive") => {
     const newAccount = { id: `temp-${Date.now()}-${Math.random()}`, name: "", apiKey: "", secretKey: "", passphrase: "" }
@@ -121,28 +130,77 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
     }
   }
 
-  const handleSubmit = () => {
-    const newTemplate: Template = {
-      id: initialData?.id || `template-${Date.now()}-${Math.random()}`,
-      name: templateName,
-      status: templateStatus ? "enabled" : "disabled",
-      runningStatus: initialData?.runningStatus || "stopped", // Keep existing status or default to stopped
-      activeControl: {
-        exchange: activeExchange,
-        accounts: activeAccounts.filter((acc) => acc.apiKey && acc.secretKey), // Only save valid accounts
-        executionMode: activeExecutionMode,
-      },
-      passiveControl: {
-        exchange: passiveExchange,
-        accounts: passiveAccounts.filter((acc) => acc.apiKey && acc.secretKey), // Only save valid accounts
-        executionMode: passiveExecutionMode,
-      },
+  const handleSubmit = async () => {
+    const errors: string[] = []
+    
+    // 基本验证
+    if (!templateName.trim()) {
+      errors.push('请输入模板名称')
     }
-    onSave(newTemplate)
+    
+    if (!activeExchange) {
+      errors.push('请选择主动控制交易所')
+    }
+    
+    if (!passiveExchange) {
+      errors.push('请选择被动控制交易所')
+    }
+    
+    // 验证账户信息
+    const validActiveAccounts = activeAccounts.filter((acc) => acc.apiKey && acc.secretKey)
+    const validPassiveAccounts = passiveAccounts.filter((acc) => acc.apiKey && acc.secretKey)
+    
+    if (validActiveAccounts.length === 0) {
+      errors.push('主动控制至少需要一个有效账户（包含API Key和Secret Key）')
+    }
+    
+    if (validPassiveAccounts.length === 0) {
+      errors.push('被动控制至少需要一个有效账户（包含API Key和Secret Key）')
+    }
+
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      return
+    }
+
+    setValidationErrors([])
+    setIsSubmitting(true)
+    
+    try {
+      const newTemplate: Template = {
+        id: initialData?.id || `template-${Date.now()}-${Math.random()}`,
+        name: templateName.trim(),
+        activeControl: {
+          exchange: activeExchange,
+          accounts: validActiveAccounts,
+          executionMode: activeExecutionMode,
+        },
+        passiveControl: {
+          exchange: passiveExchange,
+          accounts: validPassiveAccounts,
+          executionMode: passiveExecutionMode,
+        },
+      }
+      onSave(newTemplate)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const formContent = (
     <div className="grid gap-4 py-4">
+      {/* 验证错误显示 */}
+      {validationErrors.length > 0 && (
+        <div className="mb-4 p-3 bg-destructive/10 border border-destructive text-destructive rounded-lg">
+          <p className="font-medium mb-2">请修正以下错误：</p>
+          <ul className="list-disc list-inside space-y-1">
+            {validationErrors.map((error, index) => (
+              <li key={index} className="text-sm">{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="template-name" className="text-right">
           模板名称
@@ -154,15 +212,6 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
           className="col-span-3"
         />
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="template-status" className="text-right">
-          模板状态
-        </Label>
-        <div className="col-span-3 flex items-center gap-2">
-          <Switch id="template-status" checked={templateStatus} onCheckedChange={setTemplateStatus} />
-          <span>{templateStatus ? "开启" : "关闭"}</span>
-        </div>
-      </div>
 
       <div className="grid md:grid-cols-2 gap-6 mt-4">
         {/* Active Control - 卡片背景在浅色模式下为白色，暗色模式下为深灰色 */}
@@ -173,14 +222,21 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="active-exchange">交易所</Label>
-              <Select value={activeExchange} onValueChange={setActiveExchange}>
+              <Select value={activeExchange} onValueChange={setActiveExchange} disabled={exchangesLoading}>
                 <SelectTrigger id="active-exchange">
-                  <SelectValue placeholder="选择交易所" />
+                  <SelectValue placeholder={exchangesLoading ? "加载中..." : "选择交易所"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Binance">Binance</SelectItem>
-                  <SelectItem value="Coinbase">Coinbase</SelectItem>
-                  <SelectItem value="Kraken">Kraken</SelectItem>
+                  {exchangesError && (
+                    <SelectItem value="" disabled>
+                      加载失败，使用默认配置
+                    </SelectItem>
+                  )}
+                  {exchanges.map((exchange) => (
+                    <SelectItem key={exchange} value={exchange}>
+                      {exchange}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -235,7 +291,7 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
             {activeAccounts.length >= 2 && (
               <div className="grid gap-2">
                 <Label htmlFor="active-execution-mode">账户执行模型</Label>
-                <Select value={activeExecutionMode} onValueChange={setActiveExecutionMode}>
+                <Select value={activeExecutionMode} onValueChange={(value) => setActiveExecutionMode(value as "loop" | "random")}>
                   <SelectTrigger id="active-execution-mode">
                     <SelectValue placeholder="选择执行模式" />
                   </SelectTrigger>
@@ -257,14 +313,21 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="passive-exchange">交易所</Label>
-              <Select value={passiveExchange} onValueChange={setPassiveExchange}>
+              <Select value={passiveExchange} onValueChange={setPassiveExchange} disabled={exchangesLoading}>
                 <SelectTrigger id="passive-exchange">
-                  <SelectValue placeholder="选择交易所" />
+                  <SelectValue placeholder={exchangesLoading ? "加载中..." : "选择交易所"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Binance">Binance</SelectItem>
-                  <SelectItem value="Coinbase">Coinbase</SelectItem>
-                  <SelectItem value="Kraken">Kraken</SelectItem>
+                  {exchangesError && (
+                    <SelectItem value="" disabled>
+                      加载失败，使用默认配置
+                    </SelectItem>
+                  )}
+                  {exchanges.map((exchange) => (
+                    <SelectItem key={exchange} value={exchange}>
+                      {exchange}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -319,7 +382,7 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
             {passiveAccounts.length >= 2 && (
               <div className="grid gap-2">
                 <Label htmlFor="passive-execution-mode">账户执行模型</Label>
-                <Select value={passiveExecutionMode} onValueChange={setPassiveExecutionMode}>
+                <Select value={passiveExecutionMode} onValueChange={(value) => setPassiveExecutionMode(value as "loop" | "random")}>
                   <SelectTrigger id="passive-execution-mode">
                     <SelectValue placeholder="选择执行模式" />
                   </SelectTrigger>
@@ -348,8 +411,8 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
             <Button variant="outline" onClick={onClose}>
               取消
             </Button>
-            <Button onClick={handleSubmit} className="bg-primary text-primary-foreground">
-              保存
+            <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-primary text-primary-foreground">
+              {isSubmitting ? "保存中..." : "保存"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -368,8 +431,8 @@ export default function TemplateDialog({ isOpen, onClose, onSave, initialData }:
           <Button variant="outline" onClick={onClose}>
             取消
           </Button>
-          <Button onClick={handleSubmit} className="bg-primary text-primary-foreground">
-            保存
+          <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-primary text-primary-foreground">
+            {isSubmitting ? "保存中..." : "保存"}
           </Button>
         </DrawerFooter>
       </DrawerContent>

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { TemplateService } from '@/lib/services/template.service'
-
-const templateService = new TemplateService()
+import { templateRepository } from '@/lib/database/repositories'
+import { isValidExchange } from '@/lib/database/schemas'
 
 // GET /api/templates/[id] - 获取单个模板
 export async function GET(
@@ -9,17 +8,19 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const template = await templateService.getTemplate(params.id)
-    const templateData = { template }
+    const rawTemplate = await templateRepository.findByBusinessId(params.id)
     
-    if (!templateData.template) {
+    if (!rawTemplate) {
       return NextResponse.json(
         { success: false, error: 'Template not found' },
         { status: 404 }
       )
     }
     
-    return NextResponse.json({ success: true, data: templateData })
+    // 过滤掉旧的 status 和 runningStatus 字段
+    const { status, runningStatus, ...template } = rawTemplate as any
+    
+    return NextResponse.json({ success: true, data: template })
   } catch (error: any) {
     console.error('Failed to get template:', error)
     return NextResponse.json(
@@ -36,16 +37,43 @@ export async function PUT(
 ) {
   try {
     const body = await request.json()
-    const template = await templateService.updateTemplate(params.id, body)
     
-    if (!template) {
+    // 验证交易所是否在配置文件中
+    if (body.activeControl?.exchange && !isValidExchange(body.activeControl.exchange)) {
+      return NextResponse.json(
+        { success: false, error: `主动控制交易所 "${body.activeControl.exchange}" 不在配置列表中` },
+        { status: 400 }
+      )
+    }
+
+    if (body.passiveControl?.exchange && !isValidExchange(body.passiveControl.exchange)) {
+      return NextResponse.json(
+        { success: false, error: `被动控制交易所 "${body.passiveControl.exchange}" 不在配置列表中` },
+        { status: 400 }
+      )
+    }
+    
+    // 构建更新数据
+    const updateData = {
+      name: body.name,
+      activeControl: body.activeControl,
+      passiveControl: body.passiveControl
+    }
+    
+    const result = await templateRepository.updateByBusinessId(params.id, { $set: updateData })
+    
+    if (result.modifiedCount === 0) {
       return NextResponse.json(
         { success: false, error: 'Template not found' },
         { status: 404 }
       )
     }
     
-    return NextResponse.json({ success: true, data: template })
+    const rawUpdatedTemplate = await templateRepository.findByBusinessId(params.id)
+    // 过滤掉旧的 status 和 runningStatus 字段
+    const { status, runningStatus, ...updatedTemplate } = rawUpdatedTemplate as any
+    
+    return NextResponse.json({ success: true, data: updatedTemplate })
   } catch (error: any) {
     console.error('Failed to update template:', error)
     return NextResponse.json(
@@ -61,9 +89,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const success = await templateService.deleteTemplate(params.id)
+    const result = await templateRepository.deleteByBusinessId(params.id)
     
-    if (!success) {
+    if (result.deletedCount === 0) {
       return NextResponse.json(
         { success: false, error: 'Template not found' },
         { status: 404 }

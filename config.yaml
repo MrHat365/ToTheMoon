@@ -1,0 +1,32 @@
+EXCHANGES:
+  - Binance
+  - OKX
+  - Bybit
+  - Bitget
+  - BitMart
+  - Kucoin
+  - GateIO
+
+MARKETS:
+  - id: binance
+    options:
+      defaultType: future
+      adjustForTimeDifference: true
+  - id: bybit
+    options:
+      defaultType: swap
+  - id: bitget
+    options:
+      defaultType: swap
+  - id: okx
+    options:
+      defaultType: swap
+  - id: bitmart
+    options:
+      defaultType: swap
+  - id: kucoin
+    options:
+      defaultType: swap
+  - id: gateio
+    options:
+      defaultType: swap

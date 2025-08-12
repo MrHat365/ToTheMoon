@@ -38,6 +38,17 @@ export default function Header() {
           >
             控制中心
           </Link>
+          <Link
+            href="/config"
+            className={cn(
+              "px-4 py-2.5 rounded-md text-sm font-medium transition-colors", // Increased padding
+              pathname === "/config"
+                ? "bg-primary/20 text-primary border border-primary" // More prominent active state
+                : "text-muted-foreground hover:bg-secondary", // Clearer hover state
+            )}
+          >
+            系统配置
+          </Link>
         </nav>
       </div>
     </header>

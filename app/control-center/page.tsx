@@ -30,86 +30,10 @@ interface ControlConfig {
 interface Template {
   id: string
   name: string
-  status: "enabled" | "disabled"
-  runningStatus: "running" | "stopped"
   activeControl: ControlConfig
   passiveControl: ControlConfig
 }
 
-// Mock data for templates (should ideally come from a global state or API)
-const mockTemplates: Template[] = [
-  {
-    id: "1",
-    name: "BTC-USDT Strategy",
-    status: "enabled",
-    runningStatus: "running",
-    activeControl: {
-      exchange: "Binance",
-      accounts: [
-        {
-          id: "acc1",
-          name: "Binance Main",
-          apiKey: "key1_binance_abcdef1234567890",
-          secretKey: "sec1_binance",
-          passphrase: "pass1_binance",
-        },
-        {
-          id: "acc5",
-          name: "Binance Sub",
-          apiKey: "key5_binance_ghijkl0987654321",
-          secretKey: "sec5_binance",
-          passphrase: "pass5_binance",
-        },
-      ],
-      executionMode: "loop",
-    },
-    passiveControl: {
-      exchange: "Coinbase",
-      accounts: [
-        {
-          id: "acc2",
-          name: "Coinbase Main",
-          apiKey: "key2_coinbase_mnopq1234567890",
-          secretKey: "sec2_coinbase",
-          passphrase: "pass2_coinbase",
-        },
-      ],
-      executionMode: "random",
-    },
-  },
-  {
-    id: "2",
-    name: "ETH-BUSD Arbitrage",
-    status: "disabled",
-    runningStatus: "stopped",
-    activeControl: {
-      exchange: "Kraken",
-      accounts: [
-        {
-          id: "acc3",
-          name: "Kraken Spot",
-          apiKey: "key3_kraken_rstuv1234567890",
-          secretKey: "sec3_kraken",
-          passphrase: "pass3_kraken",
-        },
-      ],
-      executionMode: "random",
-    },
-    passiveControl: {
-      exchange: "Binance",
-      accounts: [
-        {
-          id: "acc4",
-          name: "Binance Futures",
-          apiKey: "key4_binance_wxyz0987654321",
-          secretKey: "sec4_binance",
-          passphrase: "pass4_binance",
-        },
-      ],
-      executionMode: "loop",
-    },
-  },
-]
 
 // Helper function to get badge color based on exchange - now using neutral secondary colors
 const getExchangeBadgeColor = (exchange: string) => {
@@ -121,9 +45,45 @@ export default function ControlCenterPage() {
   const searchParams = useSearchParams()
   const initialTemplateId = searchParams.get("templateId")
 
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialTemplateId || mockTemplates[0]?.id || "")
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialTemplateId || "")
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null)
   const [symbol, setSymbol] = useState("BTC/USDT")
+  const [isListening, setIsListening] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // 获取所有模板
+  const fetchTemplates = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/templates')
+      const data = await response.json()
+      
+      if (data.success) {
+        setTemplates(data.data)
+        
+        // 如果URL中有templateId，使用该模板；否则使用第一个模板
+        const templateToSelect = initialTemplateId 
+          ? data.data.find((t: Template) => t.id === initialTemplateId) 
+          : data.data[0]
+        
+        if (templateToSelect) {
+          setSelectedTemplateId(templateToSelect.id)
+          setCurrentTemplate(templateToSelect)
+        }
+        
+        setError(null)
+      } else {
+        setError(data.error || '获取模板失败')
+      }
+    } catch (error) {
+      console.error('获取模板失败:', error)
+      setError('网络错误，请稍后重试')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Control settings (from template)
   const [activeExecutionMode, setActiveExecutionMode] = useState<"loop" | "random">("loop")
@@ -193,8 +153,13 @@ export default function ControlCenterPage() {
   const [passiveTimedTaskAmountType, setPassiveTimedTaskAmountType] = useState<"USDT" | "TOKEN">("USDT") // New: amount type
   const [isPassiveTimedTaskRunning, setIsPassiveTimedTaskRunning] = useState(false)
 
+  // 页面加载时获取数据
   useEffect(() => {
-    const template = mockTemplates.find((t) => t.id === selectedTemplateId)
+    fetchTemplates()
+  }, [])
+
+  useEffect(() => {
+    const template = templates.find((t) => t.id === selectedTemplateId)
     setCurrentTemplate(template || null)
     if (template) {
       setSelectedActiveAccounts(template.activeControl.accounts.map((acc) => acc.id))
@@ -207,7 +172,7 @@ export default function ControlCenterPage() {
       setActiveExecutionMode("loop") // Default if no template
       setPassiveExecutionMode("loop") // Default if no template
     }
-  }, [selectedTemplateId])
+  }, [selectedTemplateId, templates])
 
   // Removed ethereum detection to prevent hydration mismatch
 
@@ -290,6 +255,18 @@ export default function ControlCenterPage() {
     alert("被动控制 - 定时任务已停止！")
   }
 
+  const handleStartListening = () => {
+    setIsListening(true)
+    console.log("启动监听:", { symbol })
+    alert(`开始监听 ${symbol}！`)
+  }
+
+  const handleStopListening = () => {
+    setIsListening(false)
+    console.log("关闭监听:", { symbol })
+    alert(`停止监听 ${symbol}！`)
+  }
+
   return (
     <div className="w-full px-4 md:px-6 py-4">
       <div className="grid gap-3 mb-4">
@@ -301,7 +278,7 @@ export default function ControlCenterPage() {
                 <SelectValue placeholder="选择模板" />
               </SelectTrigger>
               <SelectContent>
-                {mockTemplates.map((template) => (
+                {templates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>
                     {template.name}
                   </SelectItem>
@@ -311,12 +288,37 @@ export default function ControlCenterPage() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="symbol-input">Symbol</Label>
-            <Input
-              id="symbol-input"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              placeholder="e.g., BTC/USDT"
-            />
+            <div className="flex gap-2 items-center">
+              <Input
+                id="symbol-input"
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value)}
+                placeholder="e.g., BTC/USDT"
+                className="flex-1"
+              />
+              <Button
+                onClick={handleStartListening}
+                disabled={isListening}
+                className={`px-3 py-2 text-sm ${isListening 
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+                size="sm"
+              >
+                启动监听
+              </Button>
+              <Button
+                onClick={handleStopListening}
+                disabled={!isListening}
+                className={`px-3 py-2 text-sm ${!isListening 
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                  : 'bg-red-600 hover:bg-red-700 text-white'
+                }`}
+                size="sm"
+              >
+                关闭监听
+              </Button>
+            </div>
           </div>
         </div>
       </div>

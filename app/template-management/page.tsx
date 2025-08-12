@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, Play, StopCircle } from "lucide-react"
+import { Edit, Trash2, Loader2 } from "lucide-react"
 import TemplateDialog from "@/components/template-dialog"
 import { useRouter } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
 
 interface Account {
   id: string
@@ -25,50 +26,46 @@ interface ControlConfig {
 interface Template {
   id: string
   name: string
-  status: "enabled" | "disabled"
-  runningStatus: "running" | "stopped"
   activeControl: ControlConfig
   passiveControl: ControlConfig
 }
 
+
 export default function TemplateManagementPage() {
   const router = useRouter()
-  const [templates, setTemplates] = useState<Template[]>([
-    {
-      id: "1",
-      name: "BTC-USDT Strategy",
-      status: "enabled",
-      runningStatus: "running",
-      activeControl: {
-        exchange: "Binance",
-        accounts: [{ id: "acc1", name: "Binance Main", apiKey: "key1", secretKey: "sec1", passphrase: "pass1" }],
-        executionMode: "loop",
-      },
-      passiveControl: {
-        exchange: "Coinbase",
-        accounts: [{ id: "acc2", name: "Coinbase Sub", apiKey: "key2", secretKey: "sec2", passphrase: "pass2" }],
-        executionMode: "random",
-      },
-    },
-    {
-      id: "2",
-      name: "ETH-BUSD Arbitrage",
-      status: "disabled",
-      runningStatus: "stopped",
-      activeControl: {
-        exchange: "Kraken",
-        accounts: [{ id: "acc3", name: "Kraken Spot", apiKey: "key3", secretKey: "sec3", passphrase: "pass3" }],
-        executionMode: "random",
-      },
-      passiveControl: {
-        exchange: "Binance",
-        accounts: [{ id: "acc4", name: "Binance Futures", apiKey: "key4", secretKey: "sec4", passphrase: "pass4" }],
-        executionMode: "loop",
-      },
-    },
-  ])
+  const { toast } = useToast()
+  const [templates, setTemplates] = useState<Template[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+
+  // 获取所有模板
+  const fetchTemplates = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/templates')
+      const data = await response.json()
+      
+      if (data.success) {
+        setTemplates(data.data)
+        setError(null)
+      } else {
+        setError(data.error || '获取模板失败')
+      }
+    } catch (error) {
+      console.error('获取模板失败:', error)
+      setError('网络错误，请稍后重试')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 页面加载时获取数据
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
 
   const handleNewTemplate = () => {
     setEditingTemplate(null)
@@ -80,32 +77,93 @@ export default function TemplateManagementPage() {
     setIsDialogOpen(true)
   }
 
-  const handleDeleteTemplate = (id: string) => {
-    setTemplates(templates.filter((t) => t.id !== id))
+  // 删除模板
+  const handleDeleteTemplate = async (id: string) => {
+    try {
+      const response = await fetch(`/api/templates/${id}`, {
+        method: 'DELETE'
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // 删除成功，从本地状态中移除
+        setTemplates(templates.filter((t) => t.id !== id))
+        toast({
+          variant: "success",
+          title: "删除成功",
+          description: "模板已成功删除"
+        })
+      } else {
+        setError(data.error || '删除模板失败')
+        toast({
+          variant: "destructive",
+          title: "删除失败",
+          description: data.error || '删除模板失败，请稍后重试'
+        })
+      }
+    } catch (error) {
+      console.error('删除模板失败:', error)
+      setError('删除模板失败，请稍后重试')
+      toast({
+        variant: "destructive",
+        title: "网络错误",
+        description: "删除模板失败，请检查网络连接后重试"
+      })
+    }
   }
 
-  const handleSaveTemplate = (template: Template) => {
-    if (editingTemplate) {
-      setTemplates(templates.map((t) => (t.id === template.id ? template : t)))
-    } else {
-      setTemplates([...templates, { ...template, id: String(templates.length + 1), runningStatus: "stopped" }])
+  // 保存模板（创建或更新）
+  const handleSaveTemplate = async (template: Template) => {
+    try {
+      const isEditing = !!editingTemplate
+      const url = isEditing ? `/api/templates/${editingTemplate.id}` : '/api/templates'
+      const method = isEditing ? 'PUT' : 'POST'
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(template)
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // 操作成功，重新获取数据
+        await fetchTemplates()
+        setIsDialogOpen(false)
+        setError(null)
+        toast({
+          variant: "success",
+          title: isEditing ? "更新成功" : "创建成功",
+          description: isEditing ? "模板已成功更新" : "新模板已成功创建"
+        })
+      } else {
+        setError(data.error || '保存模板失败')
+        toast({
+          variant: "destructive",
+          title: "保存失败",
+          description: data.error || '保存模板失败，请稍后重试'
+        })
+      }
+    } catch (error) {
+      console.error('保存模板失败:', error)
+      setError('保存模板失败，请稍后重试')
+      toast({
+        variant: "destructive",
+        title: "网络错误",
+        description: "保存模板失败，请检查网络连接后重试"
+      })
     }
-    setIsDialogOpen(false)
   }
 
   const handleControlTemplate = (templateId: string) => {
     router.push(`/control-center?templateId=${templateId}`)
   }
 
-  const toggleRunningStatus = (id: string) => {
-    setTemplates(
-      templates.map((template) =>
-        template.id === id
-          ? { ...template, runningStatus: template.runningStatus === "running" ? "stopped" : "running" }
-          : template,
-      ),
-    )
-  }
+
 
   return (
     <div className="container mx-auto py-6">
@@ -115,14 +173,38 @@ export default function TemplateManagementPage() {
         </Button>
       </div>
 
-      {/* 表格容器背景在浅色模式下为白色，暗色模式下为深灰色 */}
-      <div className="bg-card text-card-foreground rounded-lg shadow-sm overflow-hidden border border-border">
+
+      {/* 错误提示 */}
+      {error && (
+        <div className="mb-4 p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg">
+          {error}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-2 text-destructive hover:text-destructive/80"
+            onClick={() => setError(null)}
+          >
+            ✕
+          </Button>
+        </div>
+      )}
+
+      {/* 加载状态 */}
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span>加载中...</span>
+        </div>
+      ) : (
+        <div className="bg-card text-card-foreground rounded-lg shadow-sm overflow-hidden border border-border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>模板名称</TableHead>
-              <TableHead>模板状态</TableHead>
-              <TableHead>运行状态</TableHead>
+              <TableHead>主控交易所</TableHead>
+              <TableHead>主控账户数量</TableHead>
+              <TableHead>被控交易所</TableHead>
+              <TableHead>被控账户数量</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -131,13 +213,23 @@ export default function TemplateManagementPage() {
               <TableRow key={template.id}>
                 <TableCell className="font-medium">{template.name}</TableCell>
                 <TableCell>
-                  <Badge variant={template.status === "enabled" ? "default" : "destructive"}>
-                    {template.status === "enabled" ? "开启" : "关闭"}
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    {template.activeControl.exchange}
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={template.runningStatus === "running" ? "success" : "secondary"}>
-                    {template.runningStatus === "running" ? "运行中" : "已停止"}
+                  <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+                    {template.activeControl.accounts.length} 个账户
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                    {template.passiveControl.exchange}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">
+                    {template.passiveControl.accounts.length} 个账户
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
@@ -150,17 +242,8 @@ export default function TemplateManagementPage() {
                       <Trash2 className="h-4 w-4" />
                       <span className="sr-only">删除</span>
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => handleControlTemplate(template.id)}>
-                      <Play className="h-4 w-4" />
-                      <span className="sr-only">控制</span>
-                    </Button>
-                    <Button variant="outline" size="icon" onClick={() => toggleRunningStatus(template.id)}>
-                      {template.runningStatus === "running" ? (
-                        <StopCircle className="h-4 w-4 text-destructive" />
-                      ) : (
-                        <Play className="h-4 w-4 text-primary" />
-                      )}
-                      <span className="sr-only">{template.runningStatus === "running" ? "停止" : "启动"}</span>
+                    <Button variant="default" size="sm" onClick={() => handleControlTemplate(template.id)}>
+                      执行
                     </Button>
                   </div>
                 </TableCell>
@@ -168,7 +251,8 @@ export default function TemplateManagementPage() {
             ))}
           </TableBody>
         </Table>
-      </div>
+        </div>
+      )}
 
       <TemplateDialog
         isOpen={isDialogOpen}

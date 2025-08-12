@@ -7,15 +7,33 @@ import { ObjectId } from 'mongodb'
 // ===== 基础数据类型 =====
 
 /**
- * 交易所常量 - 基于template-dialog.tsx中的实际选项
+ * 交易所类型 - 从配置文件动态加载
+ * 这里不再使用硬编码的常量，而是使用字符串类型
  */
-export const EXCHANGES = {
-  BINANCE: 'Binance',
-  COINBASE: 'Coinbase',
-  KRAKEN: 'Kraken'
-} as const
+export type ExchangeType = string
 
-export type ExchangeType = typeof EXCHANGES[keyof typeof EXCHANGES]
+/**
+ * 获取可用的交易所列表（从配置文件）
+ * 这个函数将在需要时从配置文件中获取交易所列表
+ */
+export function getAvailableExchanges(): string[] {
+  try {
+    // 动态导入配置模块以避免循环依赖
+    const { getExchanges } = require('@/lib/config')
+    return getExchanges()
+  } catch (error) {
+    console.warn('无法加载配置文件中的交易所，使用默认配置:', error)
+    return ['Binance', 'Coinbase', 'Kraken']
+  }
+}
+
+/**
+ * 验证交易所是否有效
+ */
+export function isValidExchange(exchange: string): boolean {
+  const availableExchanges = getAvailableExchanges()
+  return availableExchanges.includes(exchange)
+}
 
 /**
  * 订单类型 - 基于控制中心页面的实际订单类型
@@ -87,8 +105,6 @@ export interface Template {
   _id?: ObjectId
   id: string // 业务ID
   name: string // 模板名称
-  status: 'enabled' | 'disabled' // 模板状态
-  runningStatus: 'running' | 'stopped' // 运行状态
   activeControl: ControlConfig // 主动控制配置
   passiveControl: ControlConfig // 被动控制配置
   createdAt: Date
@@ -218,13 +234,51 @@ export interface SystemLog {
   createdAt: Date
 }
 
+// ===== Markets相关Schema =====
+
+/**
+ * 市场信息 - 存储各交易所的Symbol信息
+ */
+export interface MarketInfo {
+  _id?: ObjectId
+  unifiedSymbol: string // 统一交易对符号 如 BTC/USDT
+  exchange: string // 交易所名称
+  
+  // 交易相关核心信息
+  baseAsset: string // 基础资产 如 BTC
+  quoteAsset: string // 计价资产 如 USDT
+  contractType?: string // 合约类型：perpetual, future等
+  contractSize?: number // 合约规格
+  
+  // 交易限制
+  minOrderSize: number // 最小订单数量
+  maxOrderSize: number // 最大订单数量
+  minPrice: number // 最小价格
+  maxPrice: number // 最大价格
+  tickSize: number // 价格精度
+  stepSize: number // 数量精度
+  
+  // 费率信息
+  makerFee: number // Maker费率
+  takerFee: number // Taker费率
+  
+  // 状态信息
+  isActive: boolean // 是否活跃
+  
+  // 时间戳
+  timestamp: Date // 数据更新时间
+  createdAt: Date
+  updatedAt: Date
+}
+
 // ===== 集合名称常量 =====
 export const COLLECTIONS = {
   TEMPLATES: 'templates', 
   TIMED_TASK_CONFIGS: 'timed_task_configs',
   TIMED_TASK_HISTORIES: 'timed_task_histories',
   ORDER_EXECUTIONS: 'order_executions',
-  SYSTEM_LOGS: 'system_logs'
+  SYSTEM_LOGS: 'system_logs',
+  MARKETS: 'markets'
 } as const
 
 export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS]

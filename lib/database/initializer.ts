@@ -2,7 +2,7 @@ import { Db, Collection } from 'mongodb'
 import DatabaseClient from './client'
 import {
   COLLECTIONS,
-  EXCHANGES,
+  getAvailableExchanges,
   EXECUTION_MODES,
   ORDER_TYPES,
   TRADE_SIDES,
@@ -56,7 +56,6 @@ export class DatabaseInitializer {
     const templatesCollection = this.db.collection(COLLECTIONS.TEMPLATES)
     await templatesCollection.createIndexes([
       { key: { id: 1 }, unique: true },
-      { key: { status: 1, runningStatus: 1 } },
       { key: { createdAt: -1 } }
     ])
 
@@ -99,6 +98,18 @@ export class DatabaseInitializer {
       { key: { createdAt: 1 }, expireAfterSeconds: 30 * 24 * 60 * 60 }
     ])
 
+    // 市场信息索引
+    const marketsCollection = this.db.collection(COLLECTIONS.MARKETS)
+    await marketsCollection.createIndexes([
+      { key: { unifiedSymbol: 1, exchange: 1 }, unique: true },
+      { key: { unifiedSymbol: 1 } },
+      { key: { exchange: 1 } },
+      { key: { baseAsset: 1, quoteAsset: 1 } },
+      { key: { isActive: 1 } },
+      { key: { timestamp: -1 } },
+      { key: { updatedAt: -1 } }
+    ])
+
     console.log('索引创建完成')
   }
 
@@ -117,42 +128,49 @@ export class DatabaseInitializer {
       return
     }
 
+    // 获取配置文件中的交易所列表
+    const availableExchanges = getAvailableExchanges()
+    console.log(`使用配置文件中的交易所: ${availableExchanges.join(', ')}`)
+
+    // 确保至少有两个交易所来创建示例
+    const primaryExchange = availableExchanges[0] || 'Binance'
+    const secondaryExchange = availableExchanges[1] || availableExchanges[0] || 'OKX'
+    const tertiaryExchange = availableExchanges[2] || availableExchanges[0] || 'Bybit'
+
     // 1. 插入示例模板
     const sampleTemplates: Template[] = [
       {
         id: 'template_btc_usdt_strategy',
         name: 'BTC-USDT Strategy',
-        status: 'enabled',
-        runningStatus: 'stopped',
         activeControl: {
-          exchange: EXCHANGES.BINANCE,
+          exchange: primaryExchange,
           accounts: [
             {
-              id: 'acc_binance_main',
-              name: 'Binance Main Account',
-              apiKey: 'binance_api_key_placeholder',
-              secretKey: 'binance_secret_key_placeholder',
-              passphrase: 'binance_passphrase_placeholder'
+              id: `acc_${primaryExchange.toLowerCase()}_main`,
+              name: `${primaryExchange} Main Account`,
+              apiKey: `${primaryExchange.toLowerCase()}_api_key_placeholder`,
+              secretKey: `${primaryExchange.toLowerCase()}_secret_key_placeholder`,
+              passphrase: `${primaryExchange.toLowerCase()}_passphrase_placeholder`
             },
             {
-              id: 'acc_binance_sub',
-              name: 'Binance Sub Account', 
-              apiKey: 'binance_sub_api_key_placeholder',
-              secretKey: 'binance_sub_secret_key_placeholder',
-              passphrase: 'binance_sub_passphrase_placeholder'
+              id: `acc_${primaryExchange.toLowerCase()}_sub`,
+              name: `${primaryExchange} Sub Account`, 
+              apiKey: `${primaryExchange.toLowerCase()}_sub_api_key_placeholder`,
+              secretKey: `${primaryExchange.toLowerCase()}_sub_secret_key_placeholder`,
+              passphrase: `${primaryExchange.toLowerCase()}_sub_passphrase_placeholder`
             }
           ],
           executionMode: EXECUTION_MODES.LOOP
         },
         passiveControl: {
-          exchange: EXCHANGES.COINBASE,
+          exchange: secondaryExchange,
           accounts: [
             {
-              id: 'acc_coinbase_main',
-              name: 'Coinbase Main Account',
-              apiKey: 'coinbase_api_key_placeholder',
-              secretKey: 'coinbase_secret_key_placeholder',
-              passphrase: 'coinbase_passphrase_placeholder'
+              id: `acc_${secondaryExchange.toLowerCase()}_main`,
+              name: `${secondaryExchange} Main Account`,
+              apiKey: `${secondaryExchange.toLowerCase()}_api_key_placeholder`,
+              secretKey: `${secondaryExchange.toLowerCase()}_secret_key_placeholder`,
+              passphrase: `${secondaryExchange.toLowerCase()}_passphrase_placeholder`
             }
           ],
           executionMode: EXECUTION_MODES.RANDOM
@@ -163,30 +181,28 @@ export class DatabaseInitializer {
       {
         id: 'template_eth_busd_arbitrage',
         name: 'ETH-BUSD Arbitrage',
-        status: 'disabled',
-        runningStatus: 'stopped',
         activeControl: {
-          exchange: EXCHANGES.KRAKEN,
+          exchange: tertiaryExchange,
           accounts: [
             {
-              id: 'acc_kraken_spot',
-              name: 'Kraken Spot Account',
-              apiKey: 'kraken_api_key_placeholder',
-              secretKey: 'kraken_secret_key_placeholder', 
-              passphrase: 'kraken_passphrase_placeholder'
+              id: `acc_${tertiaryExchange.toLowerCase()}_spot`,
+              name: `${tertiaryExchange} Spot Account`,
+              apiKey: `${tertiaryExchange.toLowerCase()}_api_key_placeholder`,
+              secretKey: `${tertiaryExchange.toLowerCase()}_secret_key_placeholder`, 
+              passphrase: `${tertiaryExchange.toLowerCase()}_passphrase_placeholder`
             }
           ],
           executionMode: EXECUTION_MODES.RANDOM
         },
         passiveControl: {
-          exchange: EXCHANGES.BINANCE,
+          exchange: primaryExchange,
           accounts: [
             {
-              id: 'acc_binance_futures',
-              name: 'Binance Futures Account',
-              apiKey: 'binance_futures_api_key_placeholder',
-              secretKey: 'binance_futures_secret_key_placeholder',
-              passphrase: 'binance_futures_passphrase_placeholder'
+              id: `acc_${primaryExchange.toLowerCase()}_futures`,
+              name: `${primaryExchange} Futures Account`,
+              apiKey: `${primaryExchange.toLowerCase()}_futures_api_key_placeholder`,
+              secretKey: `${primaryExchange.toLowerCase()}_futures_secret_key_placeholder`,
+              passphrase: `${primaryExchange.toLowerCase()}_futures_passphrase_placeholder`
             }
           ],
           executionMode: EXECUTION_MODES.LOOP
