@@ -8,6 +8,16 @@ import { Edit, Trash2, Loader2 } from "lucide-react"
 import TemplateDialog from "@/components/template-dialog"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Account {
   id: string
@@ -39,6 +49,8 @@ export default function TemplateManagementPage() {
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null)
 
 
   // 获取所有模板
@@ -111,6 +123,27 @@ export default function TemplateManagementPage() {
         description: "删除模板失败，请检查网络连接后重试"
       })
     }
+  }
+
+  // 打开删除确认对话框
+  const openDeleteDialog = (template: Template) => {
+    setTemplateToDelete(template)
+    setDeleteDialogOpen(true)
+  }
+
+  // 确认删除
+  const confirmDelete = async () => {
+    if (templateToDelete) {
+      await handleDeleteTemplate(templateToDelete.id)
+      setDeleteDialogOpen(false)
+      setTemplateToDelete(null)
+    }
+  }
+
+  // 取消删除
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false)
+    setTemplateToDelete(null)
   }
 
   // 保存模板（创建或更新）
@@ -238,7 +271,7 @@ export default function TemplateManagementPage() {
                       <Edit className="h-4 w-4" />
                       <span className="sr-only">编辑</span>
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => handleDeleteTemplate(template.id)}>
+                    <Button variant="outline" size="icon" onClick={() => openDeleteDialog(template)}>
                       <Trash2 className="h-4 w-4" />
                       <span className="sr-only">删除</span>
                     </Button>
@@ -260,6 +293,24 @@ export default function TemplateManagementPage() {
         onSave={handleSaveTemplate}
         initialData={editingTemplate}
       />
+
+      {/* 删除确认对话框 */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              您确定要删除模板 "{templateToDelete?.name}" 吗？此操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDelete}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

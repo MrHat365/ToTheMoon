@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ChevronDown, ChevronUp } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface Account {
   id: string
@@ -44,11 +45,14 @@ const getExchangeBadgeColor = (exchange: string) => {
 export default function ControlCenterPage() {
   const searchParams = useSearchParams()
   const initialTemplateId = searchParams.get("templateId")
+  const { toast } = useToast()
 
   const [templates, setTemplates] = useState<Template[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialTemplateId || "")
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null)
-  const [symbol, setSymbol] = useState("BTC/USDT")
+  const [activeSymbol, setActiveSymbol] = useState("BTC/USDT")
+  const [passiveSymbol, setPassiveSymbol] = useState("BTC/USDT")
+  const [symbolSyncing, setSymbolSyncing] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -153,6 +157,91 @@ export default function ControlCenterPage() {
   const [passiveTimedTaskAmountType, setPassiveTimedTaskAmountType] = useState<"USDT" | "TOKEN">("USDT") // New: amount type
   const [isPassiveTimedTaskRunning, setIsPassiveTimedTaskRunning] = useState(false)
 
+  // 强制清理所有任务
+  const forceCleanAllTasks = async () => {
+    try {
+      const response = await fetch('/api/trading/timed-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'force-clean',
+          taskType: 'active',
+          templateId: 'cleanup'
+        })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setIsActiveTimedTaskRunning(false)
+        setIsPassiveTimedTaskRunning(false)
+        toast({
+          title: "清理成功",
+          description: "所有定时任务已强制清理完成！",
+          variant: "success",
+        })
+      } else {
+        toast({
+          title: "清理失败",
+          description: "强制清理任务失败",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("强制清理失败:", error)
+      toast({
+        title: "清理失败",
+        description: "强制清理任务时发生错误",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // 检查定时任务状态
+  const checkTaskStatus = async (templateId: string) => {
+    if (!templateId) return
+
+    try {
+      // 检查主动控制任务状态
+      const activeResponse = await fetch('/api/trading/timed-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'status',
+          taskType: 'active',
+          templateId
+        })
+      })
+      const activeData = await activeResponse.json()
+      if (activeData.success && activeData.data.status) {
+        setIsActiveTimedTaskRunning(activeData.data.status.isRunning)
+      }
+
+      // 检查被动控制任务状态
+      const passiveResponse = await fetch('/api/trading/timed-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'status',
+          taskType: 'passive',
+          templateId
+        })
+      })
+      const passiveData = await passiveResponse.json()
+      if (passiveData.success && passiveData.data.status) {
+        setIsPassiveTimedTaskRunning(passiveData.data.status.isRunning)
+      }
+    } catch (error) {
+      console.error('检查任务状态失败:', error)
+    }
+  }
+
   // 页面加载时获取数据
   useEffect(() => {
     fetchTemplates()
@@ -166,11 +255,15 @@ export default function ControlCenterPage() {
       setSelectedPassiveAccounts(template.passiveControl.accounts.map((acc) => acc.id))
       setActiveExecutionMode(template.activeControl.executionMode) // Set initial execution mode
       setPassiveExecutionMode(template.passiveControl.executionMode) // Set initial execution mode
+      // 检查定时任务状态
+      checkTaskStatus(template.id)
     } else {
       setSelectedActiveAccounts([])
       setSelectedPassiveAccounts([])
       setActiveExecutionMode("loop") // Default if no template
       setPassiveExecutionMode("loop") // Default if no template
+      setIsActiveTimedTaskRunning(false)
+      setIsPassiveTimedTaskRunning(false)
     }
   }, [selectedTemplateId, templates])
 
@@ -187,20 +280,24 @@ export default function ControlCenterPage() {
   const handlePlaceActiveOrder = (orderType: string, size: number, buySell: string, level: string) => {
     console.log(`主动控制 - 手动下单 (${orderType}):`, {
       template: currentTemplate?.name,
-      symbol,
+      activeSymbol,
       orderType,
       size,
       buySell,
       level,
       accounts: selectedActiveAccounts,
     })
-    alert(`主动控制 - 手动下单 (${orderType}) 成功！请查看控制台日志。`)
+    toast({
+      title: "下单成功",
+      description: `主动控制 - 手动下单 (${orderType}) 成功！请查看控制台日志。`,
+      variant: "default",
+    })
   }
 
   const handlePlacePassiveOrder = (orderType: string, size: number, buySell: string, level: string, price?: number) => {
     console.log(`被动控制 - 手动下单 (${orderType}):`, {
       template: currentTemplate?.name,
-      symbol,
+      passiveSymbol,
       orderType,
       size,
       buySell,
@@ -208,69 +305,367 @@ export default function ControlCenterPage() {
       price, // Include price for passive orders
       accounts: selectedPassiveAccounts,
     })
-    alert(`被动控制 - 手动下单 (${orderType}) 成功！请查看控制台日志。`)
-  }
-
-  const handleActiveTimedTaskStart = () => {
-    setIsActiveTimedTaskRunning(true)
-    console.log("主动控制 - 定时任务开启:", {
-      minSize: activeTimedTaskMinSize,
-      maxSize: activeTimedTaskMaxSize,
-      buySell: activeTimedTaskBuySell,
-      orderBookLevel: activeTimedTaskOrderBookLevel,
-      orderType: activeTimedTaskOrderType,
-      eatLimit: activeTimedTaskEatLimit,
-      minTime: activeTimedTaskMinTime,
-      maxTime: activeTimedTaskMaxTime,
-      maxTradeAmount: activeTimedTaskMaxTradeAmount,
-      amountType: activeTimedTaskAmountType,
+    toast({
+      title: "下单成功",
+      description: `被动控制 - 手动下单 (${orderType}) 成功！请查看控制台日志。`,
+      variant: "default",
     })
-    alert("主动控制 - 定时任务已开启！")
   }
 
-  const handleActiveTimedTaskStop = () => {
-    setIsActiveTimedTaskRunning(false)
-    console.log("主动控制 - 定时任务停止")
-    alert("主动控制 - 定时任务已停止！")
+  const handleActiveTimedTaskStart = async () => {
+    if (!currentTemplate) {
+      toast({
+        title: "操作失败",
+        description: "请先选择控制模板",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!activeSymbol.trim()) {
+      toast({
+        title: "操作失败",
+        description: "请输入主控所Symbol",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (selectedActiveAccounts.length === 0) {
+      toast({
+        title: "操作失败",
+        description: "请选择至少一个主动控制账户",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/trading/timed-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'start',
+          taskType: 'active',
+          templateId: currentTemplate.id,
+          config: {
+            minTimeSeconds: activeTimedTaskMinTime,
+            maxTimeSeconds: activeTimedTaskMaxTime,
+            minSize: activeTimedTaskMinSize,
+            maxSize: activeTimedTaskMaxSize,
+            buySell: activeTimedTaskBuySell,
+            orderType: activeTimedTaskOrderType,
+            symbol: activeSymbol,
+            accounts: selectedActiveAccounts,
+            orderBookLevel: activeTimedTaskOrderBookLevel,
+            eatLimit: activeTimedTaskEatLimit,
+            maxTradeAmount: activeTimedTaskMaxTradeAmount,
+            amountType: activeTimedTaskAmountType,
+          }
+        })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setIsActiveTimedTaskRunning(true)
+        console.log("主动控制 - 定时任务开启:", data)
+        toast({
+          title: "任务启动成功",
+          description: "主动控制定时任务已开启！",
+          variant: "success",
+        })
+      } else {
+        console.error("启动定时任务失败:", data.error)
+        toast({
+          title: "启动失败",
+          description: `启动定时任务失败: ${data.error}`,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('启动定时任务出错:', error)
+      toast({
+        title: "网络错误",
+        description: "启动定时任务出错，请检查网络连接",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handlePassiveTimedTaskStart = () => {
-    setIsPassiveTimedTaskRunning(true)
-    console.log("被动控制 - 定时任务开启:", {
-      minSize: passiveTimedTaskMinSize,
-      maxSize: passiveTimedTaskMaxSize,
-      buySell: passiveTimedTaskBuySell,
-      orderType: passiveTimedTaskOrderType,
-      minTime: passiveTimedTaskMinTime,
-      maxTime: passiveTimedTaskMaxTime,
-      maxTradeAmount: passiveTimedTaskMaxTradeAmount,
-      amountType: passiveTimedTaskAmountType,
-    })
-    alert("被动控制 - 定时任务已开启！")
+  const handleActiveTimedTaskStop = async () => {
+    if (!currentTemplate) {
+      toast({
+        title: "操作失败",
+        description: "请先选择控制模板",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/trading/timed-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'stop',
+          taskType: 'active',
+          templateId: currentTemplate.id
+        })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setIsActiveTimedTaskRunning(false)
+        console.log("主动控制 - 定时任务停止:", data)
+        toast({
+          title: "任务停止成功",
+          description: "主动控制定时任务已停止！",
+          variant: "default",
+        })
+      } else {
+        console.error("停止定时任务失败:", data.error)
+        toast({
+          title: "停止失败",
+          description: `停止定时任务失败: ${data.error}。您可以尝试强制清理所有任务。`,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('停止定时任务出错:', error)
+      toast({
+        title: "网络错误",
+        description: "停止定时任务出错，请检查网络连接",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handlePassiveTimedTaskStop = () => {
-    setIsPassiveTimedTaskRunning(false)
-    console.log("被动控制 - 定时任务停止")
-    alert("被动控制 - 定时任务已停止！")
+  const handlePassiveTimedTaskStart = async () => {
+    if (!currentTemplate) {
+      toast({
+        title: "操作失败",
+        description: "请先选择控制模板",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!passiveSymbol.trim()) {
+      toast({
+        title: "操作失败",
+        description: "请输入被控所Symbol",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (selectedPassiveAccounts.length === 0) {
+      toast({
+        title: "操作失败",
+        description: "请选择至少一个被动控制账户",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/trading/timed-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'start',
+          taskType: 'passive',
+          templateId: currentTemplate.id,
+          config: {
+            minTimeSeconds: passiveTimedTaskMinTime,
+            maxTimeSeconds: passiveTimedTaskMaxTime,
+            minSize: passiveTimedTaskMinSize,
+            maxSize: passiveTimedTaskMaxSize,
+            buySell: passiveTimedTaskBuySell,
+            orderType: passiveTimedTaskOrderType,
+            symbol: passiveSymbol,
+            accounts: selectedPassiveAccounts,
+            maxTradeAmount: passiveTimedTaskMaxTradeAmount,
+            amountType: passiveTimedTaskAmountType,
+          }
+        })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setIsPassiveTimedTaskRunning(true)
+        console.log("被动控制 - 定时任务开启:", data)
+        toast({
+          title: "任务启动成功",
+          description: "被动控制定时任务已开启！",
+          variant: "success",
+        })
+      } else {
+        console.error("启动定时任务失败:", data.error)
+        toast({
+          title: "启动失败",
+          description: `启动定时任务失败: ${data.error}`,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('启动定时任务出错:', error)
+      toast({
+        title: "网络错误",
+        description: "启动定时任务出错，请检查网络连接",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handlePassiveTimedTaskStop = async () => {
+    if (!currentTemplate) {
+      toast({
+        title: "操作失败",
+        description: "请先选择控制模板",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/trading/timed-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'stop',
+          taskType: 'passive',
+          templateId: currentTemplate.id
+        })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setIsPassiveTimedTaskRunning(false)
+        console.log("被动控制 - 定时任务停止:", data)
+        toast({
+          title: "任务停止成功",
+          description: "被动控制定时任务已停止！",
+          variant: "default",
+        })
+      } else {
+        console.error("停止定时任务失败:", data.error)
+        toast({
+          title: "停止失败",
+          description: `停止定时任务失败: ${data.error}。您可以尝试强制清理所有任务。`,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('停止定时任务出错:', error)
+      toast({
+        title: "网络错误",
+        description: "停止定时任务出错，请检查网络连接",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleStartListening = () => {
     setIsListening(true)
-    console.log("启动监听:", { symbol })
-    alert(`开始监听 ${symbol}！`)
+    console.log("启动监听:", { activeSymbol, passiveSymbol })
+    toast({
+      title: "监听已启动",
+      description: `开始监听 ${activeSymbol} / ${passiveSymbol}`,
+      variant: "success",
+    })
   }
 
   const handleStopListening = () => {
     setIsListening(false)
-    console.log("关闭监听:", { symbol })
-    alert(`停止监听 ${symbol}！`)
+    console.log("关闭监听:", { activeSymbol, passiveSymbol })
+    toast({
+      title: "监听已停止",
+      description: `停止监听 ${activeSymbol} / ${passiveSymbol}`,
+      variant: "destructive",
+    })
+  }
+
+  const handleSymbolSync = async () => {
+    if (!currentTemplate) {
+      toast({
+        title: "操作失败",
+        description: "请先选择控制模板",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!activeSymbol.trim() || !passiveSymbol.trim()) {
+      toast({
+        title: "操作失败",
+        description: "请输入主控所Symbol和被控所Symbol",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSymbolSyncing(true)
+    
+    try {
+      // 验证主控所Symbol
+      const activeExchange = currentTemplate.activeControl.exchange
+      const activeResponse = await fetch(`/api/symbol-validation?exchange=${encodeURIComponent(activeExchange)}&symbol=${encodeURIComponent(activeSymbol)}`)
+      const activeData = await activeResponse.json()
+      
+      // 验证被控所Symbol
+      const passiveExchange = currentTemplate.passiveControl.exchange
+      const passiveResponse = await fetch(`/api/symbol-validation?exchange=${encodeURIComponent(passiveExchange)}&symbol=${encodeURIComponent(passiveSymbol)}`)
+      const passiveData = await passiveResponse.json()
+      
+      if (activeData.success && passiveData.success) {
+        toast({
+          title: "Symbol验证成功",
+          description: `主控所(${activeExchange}): ${activeSymbol} ✓\n被控所(${passiveExchange}): ${passiveSymbol} ✓`,
+          variant: "default",
+        })
+      } else {
+        let errorDetails = []
+        if (!activeData.success) {
+          errorDetails.push(`主控所(${activeExchange}): ${activeSymbol} ✗ - ${activeData.error}`)
+        }
+        if (!passiveData.success) {
+          errorDetails.push(`被控所(${passiveExchange}): ${passiveSymbol} ✗ - ${passiveData.error}`)
+        }
+        toast({
+          title: "Symbol验证失败",
+          description: errorDetails.join('\n'),
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Symbol同步失败:', error)
+      toast({
+        title: "网络错误",
+        description: "Symbol同步失败，请检查网络连接",
+        variant: "destructive",
+      })
+    } finally {
+      setSymbolSyncing(false)
+    }
   }
 
   return (
     <div className="w-full px-4 md:px-6 py-4">
       <div className="grid gap-3 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div className="grid gap-2">
             <Label htmlFor="select-template">选择控制模板</Label>
             <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
@@ -287,38 +682,55 @@ export default function ControlCenterPage() {
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="symbol-input">Symbol</Label>
-            <div className="flex gap-2 items-center">
-              <Input
-                id="symbol-input"
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value)}
-                placeholder="e.g., BTC/USDT"
-                className="flex-1"
-              />
-              <Button
-                onClick={handleStartListening}
-                disabled={isListening}
-                className={`px-3 py-2 text-sm ${isListening 
-                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                  : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
-                size="sm"
-              >
-                启动监听
-              </Button>
-              <Button
-                onClick={handleStopListening}
-                disabled={!isListening}
-                className={`px-3 py-2 text-sm ${!isListening 
-                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                  : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
-                size="sm"
-              >
-                关闭监听
-              </Button>
-            </div>
+            <Label htmlFor="active-symbol-input">主控所Symbol</Label>
+            <Input
+              id="active-symbol-input"
+              value={activeSymbol}
+              onChange={(e) => setActiveSymbol(e.target.value.toUpperCase())}
+              placeholder="例如: BTC/USDT"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="passive-symbol-input">被控所Symbol</Label>
+            <Input
+              id="passive-symbol-input"
+              value={passiveSymbol}
+              onChange={(e) => setPassiveSymbol(e.target.value.toUpperCase())}
+              placeholder="例如: BTC/USDT"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSymbolSync}
+              disabled={symbolSyncing}
+              className="px-3 py-2 text-sm"
+              style={{ backgroundColor: '#0F127A', color: 'white' }}
+              size="sm"
+            >
+              {symbolSyncing ? 'Symbol同步中...' : 'Symbol同步'}
+            </Button>
+            <Button
+              onClick={handleStartListening}
+              disabled={isListening}
+              className={`px-3 py-2 text-sm ${isListening 
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
+              size="sm"
+            >
+              启动监听
+            </Button>
+            <Button
+              onClick={handleStopListening}
+              disabled={!isListening}
+              className={`px-3 py-2 text-sm ${!isListening 
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                : 'bg-red-600 hover:bg-red-700 text-white'
+              }`}
+              size="sm"
+            >
+              关闭监听
+            </Button>
           </div>
         </div>
       </div>
@@ -376,7 +788,7 @@ export default function ControlCenterPage() {
 
             <div className="grid gap-2">
               <Label htmlFor="active-execution-mode">账户执行模式</Label>
-              <Select value={activeExecutionMode} onValueChange={setActiveExecutionMode}>
+              <Select value={activeExecutionMode} onValueChange={(value: "loop" | "random") => setActiveExecutionMode(value)}>
                 <SelectTrigger id="active-execution-mode">
                   <SelectValue placeholder="选择执行模式" />
                 </SelectTrigger>
@@ -409,7 +821,7 @@ export default function ControlCenterPage() {
                     </div>
                     <div className="grid gap-1">
                       <Label htmlFor="active-gtc-limit-buy-sell">买/卖</Label>
-                      <Select value={activeGtcLimitBuySell} onValueChange={setActiveGtcLimitBuySell}>
+                      <Select value={activeGtcLimitBuySell} onValueChange={(value: "buy" | "sell") => setActiveGtcLimitBuySell(value)}>
                         <SelectTrigger id="active-gtc-limit-buy-sell">
                           <SelectValue placeholder="买/卖" />
                         </SelectTrigger>
@@ -470,7 +882,7 @@ export default function ControlCenterPage() {
                     </div>
                     <div className="grid gap-1">
                       <Label htmlFor="active-ioc-limit-buy-sell">买/卖</Label>
-                      <Select value={activeIocLimitBuySell} onValueChange={setActiveIocLimitBuySell}>
+                      <Select value={activeIocLimitBuySell} onValueChange={(value: "buy" | "sell") => setActiveIocLimitBuySell(value)}>
                         <SelectTrigger id="active-ioc-limit-buy-sell">
                           <SelectValue placeholder="买/卖" />
                         </SelectTrigger>
@@ -529,7 +941,7 @@ export default function ControlCenterPage() {
                     </div>
                     <div className="grid gap-1">
                       <Label htmlFor="active-market-buy-sell">买/卖</Label>
-                      <Select value={activeMarketBuySell} onValueChange={setActiveMarketBuySell}>
+                      <Select value={activeMarketBuySell} onValueChange={(value: "buy" | "sell") => setActiveMarketBuySell(value)}>
                         <SelectTrigger id="active-market-buy-sell">
                           <SelectValue placeholder="买/卖" />
                         </SelectTrigger>
@@ -569,7 +981,15 @@ export default function ControlCenterPage() {
 
             {/* 定时任务模块 */}
             <div className="border-t border-border pt-4 mt-4">
-              <h3 className="text-md font-semibold mb-3 text-foreground">定时任务</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-md font-semibold text-foreground">定时任务</h3>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${isActiveTimedTaskRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-muted-foreground">
+                    {isActiveTimedTaskRunning ? '运行中' : '已停止'}
+                  </span>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="active-timed-task-min-size">Size (Min)</Label>
@@ -579,6 +999,7 @@ export default function ControlCenterPage() {
                     step="0.01"
                     value={activeTimedTaskMinSize}
                     onChange={(e) => setActiveTimedTaskMinSize(Number.parseFloat(e.target.value))}
+                    disabled={isActiveTimedTaskRunning}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -589,6 +1010,7 @@ export default function ControlCenterPage() {
                     step="0.01"
                     value={activeTimedTaskMaxSize}
                     onChange={(e) => setActiveTimedTaskMaxSize(Number.parseFloat(e.target.value))}
+                    disabled={isActiveTimedTaskRunning}
                   />
                 </div>
               </div>
@@ -601,6 +1023,7 @@ export default function ControlCenterPage() {
                     step="1"
                     value={activeTimedTaskMinTime}
                     onChange={(e) => setActiveTimedTaskMinTime(Number.parseInt(e.target.value))}
+                    disabled={isActiveTimedTaskRunning}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -611,13 +1034,14 @@ export default function ControlCenterPage() {
                     step="1"
                     value={activeTimedTaskMaxTime}
                     onChange={(e) => setActiveTimedTaskMaxTime(Number.parseInt(e.target.value))}
+                    disabled={isActiveTimedTaskRunning}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-4 mt-4">
                 <div className="grid gap-2">
                   <Label htmlFor="active-timed-task-buy-sell">买/卖</Label>
-                  <Select value={activeTimedTaskBuySell} onValueChange={(value: "buy" | "sell") => setActiveTimedTaskBuySell(value)}>
+                  <Select value={activeTimedTaskBuySell} onValueChange={(value: "buy" | "sell") => setActiveTimedTaskBuySell(value)} disabled={isActiveTimedTaskRunning}>
                     <SelectTrigger id="active-timed-task-buy-sell">
                       <SelectValue placeholder="买/卖" />
                     </SelectTrigger>
@@ -629,7 +1053,7 @@ export default function ControlCenterPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="active-timed-task-order-book-level">OrderBook Level</Label>
-                  <Select value={activeTimedTaskOrderBookLevel} onValueChange={setActiveTimedTaskOrderBookLevel}>
+                  <Select value={activeTimedTaskOrderBookLevel} onValueChange={setActiveTimedTaskOrderBookLevel} disabled={isActiveTimedTaskRunning}>
                     <SelectTrigger id="active-timed-task-order-book-level">
                       <SelectValue placeholder="等级" />
                     </SelectTrigger>
@@ -644,7 +1068,7 @@ export default function ControlCenterPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="active-timed-task-order-type">订单类型</Label>
-                  <Select value={activeTimedTaskOrderType} onValueChange={(value: "GTC LIMIT" | "IOC LIMIT" | "MARKET") => setActiveTimedTaskOrderType(value)}>
+                  <Select value={activeTimedTaskOrderType} onValueChange={(value: "GTC LIMIT" | "IOC LIMIT" | "MARKET") => setActiveTimedTaskOrderType(value)} disabled={isActiveTimedTaskRunning}>
                     <SelectTrigger id="active-timed-task-order-type">
                       <SelectValue placeholder="选择订单类型" />
                     </SelectTrigger>
@@ -664,6 +1088,7 @@ export default function ControlCenterPage() {
                     value={activeTimedTaskEatLimit}
                     onChange={(e) => setActiveTimedTaskEatLimit(Number.parseFloat(e.target.value))}
                     placeholder="吃单限制数量"
+                    disabled={isActiveTimedTaskRunning}
                   />
                 </div>
               </div>
@@ -678,6 +1103,7 @@ export default function ControlCenterPage() {
                     onChange={(e) => setActiveTimedTaskMaxTradeAmount(Number.parseFloat(e.target.value))}
                     placeholder="最大交易量"
                     className="flex-1"
+                    disabled={isActiveTimedTaskRunning}
                   />
                   <div className="flex border border-input rounded-md">
                     <Button
@@ -686,6 +1112,7 @@ export default function ControlCenterPage() {
                       onClick={() => setActiveTimedTaskAmountType("USDT")}
                       className="rounded-r-none border-r"
                       size="sm"
+                      disabled={isActiveTimedTaskRunning}
                     >
                       USDT
                     </Button>
@@ -695,6 +1122,7 @@ export default function ControlCenterPage() {
                       onClick={() => setActiveTimedTaskAmountType("TOKEN")}
                       className="rounded-l-none"
                       size="sm"
+                      disabled={isActiveTimedTaskRunning}
                     >
                       TOKEN
                     </Button>
@@ -702,13 +1130,24 @@ export default function ControlCenterPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-4 mt-4">
-                <Button variant="outline" onClick={handleActiveTimedTaskStop} disabled={!isActiveTimedTaskRunning}>
+                <Button 
+                  variant="outline" 
+                  onClick={handleActiveTimedTaskStop} 
+                  disabled={!isActiveTimedTaskRunning}
+                  className={`${!isActiveTimedTaskRunning 
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                    : 'bg-red-500 text-white border-red-500 hover:bg-red-600'
+                  }`}
+                >
                   停止
                 </Button>
                 <Button
                   onClick={handleActiveTimedTaskStart}
                   disabled={isActiveTimedTaskRunning}
-                  className="bg-primary text-primary-foreground"
+                  className={`${isActiveTimedTaskRunning 
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                  }`}
                 >
                   开启
                 </Button>
@@ -769,7 +1208,7 @@ export default function ControlCenterPage() {
 
             <div className="grid gap-2">
               <Label htmlFor="passive-execution-mode">账户执行模式</Label>
-              <Select value={passiveExecutionMode} onValueChange={setPassiveExecutionMode}>
+              <Select value={passiveExecutionMode} onValueChange={(value: "loop" | "random") => setPassiveExecutionMode(value)}>
                 <SelectTrigger id="passive-execution-mode">
                   <SelectValue placeholder="选择执行模式" />
                 </SelectTrigger>
@@ -802,7 +1241,7 @@ export default function ControlCenterPage() {
                     </div>
                     <div className="grid gap-1">
                       <Label htmlFor="passive-gtc-limit-buy-sell">买/卖</Label>
-                      <Select value={passiveGtcLimitBuySell} onValueChange={setPassiveGtcLimitBuySell}>
+                      <Select value={passiveGtcLimitBuySell} onValueChange={(value: "buy" | "sell") => setPassiveGtcLimitBuySell(value)}>
                         <SelectTrigger id="passive-gtc-limit-buy-sell">
                           <SelectValue placeholder="买/卖" />
                         </SelectTrigger>
@@ -877,7 +1316,7 @@ export default function ControlCenterPage() {
                     </div>
                     <div className="grid gap-1">
                       <Label htmlFor="passive-ioc-limit-buy-sell">买/卖</Label>
-                      <Select value={passiveIocLimitBuySell} onValueChange={setPassiveIocLimitBuySell}>
+                      <Select value={passiveIocLimitBuySell} onValueChange={(value: "buy" | "sell") => setPassiveIocLimitBuySell(value)}>
                         <SelectTrigger id="passive-ioc-limit-buy-sell">
                           <SelectValue placeholder="买/卖" />
                         </SelectTrigger>
@@ -950,7 +1389,7 @@ export default function ControlCenterPage() {
                     </div>
                     <div className="grid gap-1">
                       <Label htmlFor="passive-market-buy-sell">买/卖</Label>
-                      <Select value={passiveMarketBuySell} onValueChange={setPassiveMarketBuySell}>
+                      <Select value={passiveMarketBuySell} onValueChange={(value: "buy" | "sell") => setPassiveMarketBuySell(value)}>
                         <SelectTrigger id="passive-market-buy-sell">
                           <SelectValue placeholder="买/卖" />
                         </SelectTrigger>
@@ -1009,7 +1448,15 @@ export default function ControlCenterPage() {
 
             {/* 定时任务模块 */}
             <div className="border-t border-border pt-4 mt-4">
-              <h3 className="text-md font-semibold mb-3 text-foreground">定时任务</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-md font-semibold text-foreground">定时任务</h3>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${isPassiveTimedTaskRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-muted-foreground">
+                    {isPassiveTimedTaskRunning ? '运行中' : '已停止'}
+                  </span>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="passive-timed-task-min-size">Size (Min)</Label>
@@ -1019,6 +1466,7 @@ export default function ControlCenterPage() {
                     step="0.01"
                     value={passiveTimedTaskMinSize}
                     onChange={(e) => setPassiveTimedTaskMinSize(Number.parseFloat(e.target.value))}
+                    disabled={isPassiveTimedTaskRunning}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1029,6 +1477,7 @@ export default function ControlCenterPage() {
                     step="0.01"
                     value={passiveTimedTaskMaxSize}
                     onChange={(e) => setPassiveTimedTaskMaxSize(Number.parseFloat(e.target.value))}
+                    disabled={isPassiveTimedTaskRunning}
                   />
                 </div>
               </div>
@@ -1041,6 +1490,7 @@ export default function ControlCenterPage() {
                     step="1"
                     value={passiveTimedTaskMinTime}
                     onChange={(e) => setPassiveTimedTaskMinTime(Number.parseInt(e.target.value))}
+                    disabled={isPassiveTimedTaskRunning}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1051,13 +1501,14 @@ export default function ControlCenterPage() {
                     step="1"
                     value={passiveTimedTaskMaxTime}
                     onChange={(e) => setPassiveTimedTaskMaxTime(Number.parseInt(e.target.value))}
+                    disabled={isPassiveTimedTaskRunning}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 mt-4">
                 <div className="grid gap-2">
                   <Label htmlFor="passive-timed-task-buy-sell">买/卖</Label>
-                  <Select value={passiveTimedTaskBuySell} onValueChange={setPassiveTimedTaskBuySell}>
+                  <Select value={passiveTimedTaskBuySell} onValueChange={(value: "buy" | "sell") => setPassiveTimedTaskBuySell(value)} disabled={isPassiveTimedTaskRunning}>
                     <SelectTrigger id="passive-timed-task-buy-sell">
                       <SelectValue placeholder="买/卖" />
                     </SelectTrigger>
@@ -1069,7 +1520,7 @@ export default function ControlCenterPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="passive-timed-task-order-type">订单类型</Label>
-                  <Select value={passiveTimedTaskOrderType} onValueChange={setPassiveTimedTaskOrderType}>
+                  <Select value={passiveTimedTaskOrderType} onValueChange={(value: "GTC LIMIT" | "IOC LIMIT" | "MARKET") => setPassiveTimedTaskOrderType(value)} disabled={isPassiveTimedTaskRunning}>
                     <SelectTrigger id="passive-timed-task-order-type">
                       <SelectValue placeholder="选择订单类型" />
                     </SelectTrigger>
@@ -1092,6 +1543,7 @@ export default function ControlCenterPage() {
                     onChange={(e) => setPassiveTimedTaskMaxTradeAmount(Number.parseFloat(e.target.value))}
                     placeholder="最大交易量"
                     className="flex-1"
+                    disabled={isPassiveTimedTaskRunning}
                   />
                   <div className="flex border border-input rounded-md">
                     <Button
@@ -1100,6 +1552,7 @@ export default function ControlCenterPage() {
                       onClick={() => setPassiveTimedTaskAmountType("USDT")}
                       className="rounded-r-none border-r"
                       size="sm"
+                      disabled={isPassiveTimedTaskRunning}
                     >
                       USDT
                     </Button>
@@ -1109,6 +1562,7 @@ export default function ControlCenterPage() {
                       onClick={() => setPassiveTimedTaskAmountType("TOKEN")}
                       className="rounded-l-none"
                       size="sm"
+                      disabled={isPassiveTimedTaskRunning}
                     >
                       TOKEN
                     </Button>
@@ -1116,13 +1570,24 @@ export default function ControlCenterPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-4 mt-4">
-                <Button variant="outline" onClick={handlePassiveTimedTaskStop} disabled={!isPassiveTimedTaskRunning}>
+                <Button 
+                  variant="outline" 
+                  onClick={handlePassiveTimedTaskStop} 
+                  disabled={!isPassiveTimedTaskRunning}
+                  className={`${!isPassiveTimedTaskRunning 
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                    : 'bg-red-500 text-white border-red-500 hover:bg-red-600'
+                  }`}
+                >
                   停止
                 </Button>
                 <Button
                   onClick={handlePassiveTimedTaskStart}
                   disabled={isPassiveTimedTaskRunning}
-                  className="bg-primary text-primary-foreground"
+                  className={`${isPassiveTimedTaskRunning 
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                  }`}
                 >
                   开启
                 </Button>
