@@ -786,66 +786,68 @@ export default function ControlCenterPage() {
               </CollapsibleContent>
             </Collapsible>
 
-            <div className="grid gap-2">
-              <Label htmlFor="active-execution-mode">账户执行模式</Label>
-              <Select value={activeExecutionMode} onValueChange={(value: "loop" | "random") => setActiveExecutionMode(value)}>
-                <SelectTrigger id="active-execution-mode">
-                  <SelectValue placeholder="选择执行模式" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="loop">循环执行</SelectItem>
-                  <SelectItem value="random">随机执行</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
-            {/* 订单部分 (手动下单) - 重新设计 */}
+            {/* 订单部分 (手动下单) - 两行排列 */}
             <div className="border-t border-border pt-4 mt-4">
               <h3 className="text-md font-semibold mb-3 text-foreground">订单部分 (手动下单)</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="grid gap-3">
                 {/* GTC LIMIT */}
-                <Card className="border border-border rounded-lg p-4 shadow-sm bg-card">
-                  <CardHeader className="p-0 pb-2">
-                    <CardTitle className="text-base text-center text-foreground py-2 rounded-md">GTC LIMIT</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 p-0 pt-0">
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-gtc-limit-size">数量</Label>
-                      <Input
-                        id="active-gtc-limit-size"
-                        type="number"
-                        step="0.01"
-                        value={activeGtcLimitSize}
-                        onChange={(e) => setActiveGtcLimitSize(Number.parseFloat(e.target.value))}
-                      />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-gtc-limit-buy-sell">买/卖</Label>
-                      <Select value={activeGtcLimitBuySell} onValueChange={(value: "buy" | "sell") => setActiveGtcLimitBuySell(value)}>
-                        <SelectTrigger id="active-gtc-limit-buy-sell">
-                          <SelectValue placeholder="买/卖" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="buy">买入</SelectItem>
-                          <SelectItem value="sell">卖出</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-gtc-limit-level">OrderBook Level</Label>
-                      <Select value={activeGtcLimitLevel} onValueChange={setActiveGtcLimitLevel}>
-                        <SelectTrigger id="active-gtc-limit-level">
-                          <SelectValue placeholder="等级" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 10 }, (_, i) => (
-                            <SelectItem key={i + 1} value={String(i + 1)}>
-                              {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <Card className="border border-border rounded-lg p-3 shadow-sm bg-card">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="text-sm font-semibold text-foreground whitespace-nowrap">GTC LIMIT</div>
+                    <Input
+                      id="active-gtc-limit-size"
+                      type="number"
+                      step="0.01"
+                      value={activeGtcLimitSize}
+                      onChange={(e) => setActiveGtcLimitSize(Number.parseFloat(e.target.value))}
+                      placeholder="数量"
+                      className="flex-1 min-w-0"
+                    />
+                    <Select value={activeGtcLimitBuySell} onValueChange={(value: "buy" | "sell") => setActiveGtcLimitBuySell(value)}>
+                      <SelectTrigger className="flex-1 min-w-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="buy">买入</SelectItem>
+                        <SelectItem value="sell">卖出</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value="ONCE" onValueChange={() => {}}>
+                      <SelectTrigger className="flex-1 min-w-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ONCE">ONCE</SelectItem>
+                        <SelectItem value="TRACK">TRACK</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="active-gtc-limit-wait-min"
+                      type="number"
+                      step="1"
+                      placeholder="MIN(S)"
+                      className="flex-1 min-w-0"
+                    />
+                    <Input
+                      id="active-gtc-limit-wait-max"
+                      type="number"
+                      step="1"
+                      placeholder="MAX(S)"
+                      className="flex-1 min-w-0"
+                    />
+                    <Select value={activeGtcLimitLevel} onValueChange={setActiveGtcLimitLevel}>
+                      <SelectTrigger className="flex-1 min-w-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 10 }, (_, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>
+                            {i + 1}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       onClick={() =>
                         handlePlaceActiveOrder(
@@ -855,48 +857,41 @@ export default function ControlCenterPage() {
                           activeGtcLimitLevel,
                         )
                       }
-                      className="bg-primary text-primary-foreground mt-2"
+                      className="bg-primary text-primary-foreground px-4 py-2 text-sm whitespace-nowrap"
+                      size="sm"
                     >
                       下单
                     </Button>
-                  </CardContent>
+                  </div>
                 </Card>
 
-                {/* IOC LIMIT */}
-                <Card className="border border-border rounded-lg p-4 shadow-sm bg-card">
-                  <CardHeader className="p-0 pb-2">
-                    <CardTitle className="text-base text-center text-muted-foreground py-2 rounded-md">
-                      IOC LIMIT
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 p-0 pt-0">
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-ioc-limit-size">数量</Label>
+                {/* IOC LIMIT 和 MARKET 在同一行 */}
+                <div className="flex gap-3">
+                  {/* IOC LIMIT */}
+                  <Card className="border border-border rounded-lg p-3 shadow-sm bg-card flex-1">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="text-sm font-semibold text-muted-foreground whitespace-nowrap">IOC LIMIT</div>
                       <Input
                         id="active-ioc-limit-size"
                         type="number"
                         step="0.01"
                         value={activeIocLimitSize}
                         onChange={(e) => setActiveIocLimitSize(Number.parseFloat(e.target.value))}
+                        placeholder="数量"
+                        className="flex-1 min-w-0"
                       />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-ioc-limit-buy-sell">买/卖</Label>
                       <Select value={activeIocLimitBuySell} onValueChange={(value: "buy" | "sell") => setActiveIocLimitBuySell(value)}>
-                        <SelectTrigger id="active-ioc-limit-buy-sell">
-                          <SelectValue placeholder="买/卖" />
+                        <SelectTrigger className="flex-1 min-w-0">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="buy">买入</SelectItem>
                           <SelectItem value="sell">卖出</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-ioc-limit-level">OrderBook Level</Label>
                       <Select value={activeIocLimitLevel} onValueChange={setActiveIocLimitLevel}>
-                        <SelectTrigger id="active-ioc-limit-level">
-                          <SelectValue placeholder="等级" />
+                        <SelectTrigger className="flex-1 min-w-0">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {Array.from({ length: 10 }, (_, i) => (
@@ -906,76 +901,57 @@ export default function ControlCenterPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Button
+                        onClick={() =>
+                          handlePlaceActiveOrder(
+                            "IOC LIMIT",
+                            activeIocLimitSize,
+                            activeIocLimitBuySell,
+                            activeIocLimitLevel,
+                          )
+                        }
+                        className="bg-primary text-primary-foreground px-4 py-2 text-sm whitespace-nowrap"
+                        size="sm"
+                      >
+                        下单
+                      </Button>
                     </div>
-                    <Button
-                      onClick={() =>
-                        handlePlaceActiveOrder(
-                          "IOC LIMIT",
-                          activeIocLimitSize,
-                          activeIocLimitBuySell,
-                          activeIocLimitLevel,
-                        )
-                      }
-                      className="bg-primary text-primary-foreground mt-2"
-                    >
-                      下单
-                    </Button>
-                  </CardContent>
-                </Card>
+                  </Card>
 
-                {/* MARKET */}
-                <Card className="border border-primary rounded-lg p-4 shadow-sm bg-primary/10">
-                  <CardHeader className="p-0 pb-2">
-                    <CardTitle className="text-base text-center text-primary py-2 rounded-md">MARKET</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 p-0 pt-0">
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-market-size">数量</Label>
+                  {/* MARKET */}
+                  <Card className="border border-primary rounded-lg p-3 shadow-sm bg-primary/10 flex-1">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="text-sm font-semibold text-primary whitespace-nowrap">MARKET</div>
                       <Input
                         id="active-market-size"
                         type="number"
                         step="0.01"
                         value={activeMarketSize}
                         onChange={(e) => setActiveMarketSize(Number.parseFloat(e.target.value))}
+                        placeholder="数量"
+                        className="flex-1 min-w-0"
                       />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-market-buy-sell">买/卖</Label>
                       <Select value={activeMarketBuySell} onValueChange={(value: "buy" | "sell") => setActiveMarketBuySell(value)}>
-                        <SelectTrigger id="active-market-buy-sell">
-                          <SelectValue placeholder="买/卖" />
+                        <SelectTrigger className="flex-1 min-w-0">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="buy">买入</SelectItem>
                           <SelectItem value="sell">卖出</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Button
+                        onClick={() =>
+                          handlePlaceActiveOrder("MARKET", activeMarketSize, activeMarketBuySell, activeMarketLevel)
+                        }
+                        className="bg-primary text-primary-foreground px-4 py-2 text-sm whitespace-nowrap"
+                        size="sm"
+                      >
+                        下单
+                      </Button>
                     </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="active-market-level">OrderBook Level</Label>
-                      <Select value={activeMarketLevel} onValueChange={setActiveMarketLevel}>
-                        <SelectTrigger id="active-market-level">
-                          <SelectValue placeholder="等级" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 10 }, (_, i) => (
-                            <SelectItem key={i + 1} value={String(i + 1)}>
-                              {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button
-                      onClick={() =>
-                        handlePlaceActiveOrder("MARKET", activeMarketSize, activeMarketBuySell, activeMarketLevel)
-                      }
-                      className="bg-primary text-primary-foreground mt-2"
-                    >
-                      下单
-                    </Button>
-                  </CardContent>
-                </Card>
+                  </Card>
+                </div>
               </div>
             </div>
 
@@ -990,7 +966,7 @@ export default function ControlCenterPage() {
                   </span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="active-timed-task-min-size">Size (Min)</Label>
                   <Input
@@ -1013,8 +989,6 @@ export default function ControlCenterPage() {
                     disabled={isActiveTimedTaskRunning}
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-4">
                 <div className="grid gap-2">
                   <Label htmlFor="active-timed-task-min-time">时间 (Min, 秒)</Label>
                   <Input
@@ -1092,65 +1066,67 @@ export default function ControlCenterPage() {
                   />
                 </div>
               </div>
-              <div className="grid gap-2 mt-4">
-                <Label htmlFor="active-timed-task-max-amount">最大交易量</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="active-timed-task-max-amount"
-                    type="number"
-                    step="0.01"
-                    value={activeTimedTaskMaxTradeAmount}
-                    onChange={(e) => setActiveTimedTaskMaxTradeAmount(Number.parseFloat(e.target.value))}
-                    placeholder="最大交易量"
-                    className="flex-1"
-                    disabled={isActiveTimedTaskRunning}
-                  />
-                  <div className="flex border border-input rounded-md">
-                    <Button
-                      type="button"
-                      variant={activeTimedTaskAmountType === "USDT" ? "default" : "ghost"}
-                      onClick={() => setActiveTimedTaskAmountType("USDT")}
-                      className="rounded-r-none border-r"
-                      size="sm"
+              <div className="flex items-end justify-between gap-4 mt-4">
+                <div className="grid gap-2 flex-1">
+                  <Label htmlFor="active-timed-task-max-amount">最大交易量</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="active-timed-task-max-amount"
+                      type="number"
+                      step="0.01"
+                      value={activeTimedTaskMaxTradeAmount}
+                      onChange={(e) => setActiveTimedTaskMaxTradeAmount(Number.parseFloat(e.target.value))}
+                      placeholder="最大交易量"
+                      className="flex-1"
                       disabled={isActiveTimedTaskRunning}
-                    >
-                      USDT
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={activeTimedTaskAmountType === "TOKEN" ? "default" : "ghost"}
-                      onClick={() => setActiveTimedTaskAmountType("TOKEN")}
-                      className="rounded-l-none"
-                      size="sm"
-                      disabled={isActiveTimedTaskRunning}
-                    >
-                      TOKEN
-                    </Button>
+                    />
+                    <div className="flex border border-input rounded-md">
+                      <Button
+                        type="button"
+                        variant={activeTimedTaskAmountType === "USDT" ? "default" : "ghost"}
+                        onClick={() => setActiveTimedTaskAmountType("USDT")}
+                        className="rounded-r-none border-r"
+                        size="sm"
+                        disabled={isActiveTimedTaskRunning}
+                      >
+                        USDT
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={activeTimedTaskAmountType === "TOKEN" ? "default" : "ghost"}
+                        onClick={() => setActiveTimedTaskAmountType("TOKEN")}
+                        className="rounded-l-none"
+                        size="sm"
+                        disabled={isActiveTimedTaskRunning}
+                      >
+                        TOKEN
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex justify-end gap-4 mt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={handleActiveTimedTaskStop} 
-                  disabled={!isActiveTimedTaskRunning}
-                  className={`${!isActiveTimedTaskRunning 
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-                    : 'bg-red-500 text-white border-red-500 hover:bg-red-600'
-                  }`}
-                >
-                  停止
-                </Button>
-                <Button
-                  onClick={handleActiveTimedTaskStart}
-                  disabled={isActiveTimedTaskRunning}
-                  className={`${isActiveTimedTaskRunning 
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-                    : 'bg-green-500 text-white hover:bg-green-600'
-                  }`}
-                >
-                  开启
-                </Button>
+                <div className="flex gap-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleActiveTimedTaskStop} 
+                    disabled={!isActiveTimedTaskRunning}
+                    className={`${!isActiveTimedTaskRunning 
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                      : 'bg-red-500 text-white border-red-500 hover:bg-red-600'
+                    }`}
+                  >
+                    停止
+                  </Button>
+                  <Button
+                    onClick={handleActiveTimedTaskStart}
+                    disabled={isActiveTimedTaskRunning}
+                    className={`${isActiveTimedTaskRunning 
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                      : 'bg-green-500 text-white hover:bg-green-600'
+                    }`}
+                  >
+                    开启
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -1206,79 +1182,45 @@ export default function ControlCenterPage() {
               </CollapsibleContent>
             </Collapsible>
 
-            <div className="grid gap-2">
-              <Label htmlFor="passive-execution-mode">账户执行模式</Label>
-              <Select value={passiveExecutionMode} onValueChange={(value: "loop" | "random") => setPassiveExecutionMode(value)}>
-                <SelectTrigger id="passive-execution-mode">
-                  <SelectValue placeholder="选择执行模式" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="loop">循环执行</SelectItem>
-                  <SelectItem value="random">随机执行</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
-            {/* 订单部分 (手动下单) - 重新设计 */}
+            {/* 订单部分 (手动下单) - 两行排列 */}
             <div className="border-t border-border pt-4 mt-4">
               <h3 className="text-md font-semibold mb-3 text-foreground">订单部分 (手动下单)</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="grid gap-3">
                 {/* GTC LIMIT */}
-                <Card className="border border-border rounded-lg p-4 shadow-sm bg-card">
-                  <CardHeader className="p-0 pb-2">
-                    <CardTitle className="text-base text-center text-foreground py-2 rounded-md">GTC LIMIT</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 p-0 pt-0">
-                    <div className="grid gap-1">
-                      <Label htmlFor="passive-gtc-limit-size">数量</Label>
-                      <Input
-                        id="passive-gtc-limit-size"
-                        type="number"
-                        step="0.01"
-                        value={passiveGtcLimitSize}
-                        onChange={(e) => setPassiveGtcLimitSize(Number.parseFloat(e.target.value))}
-                      />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="passive-gtc-limit-buy-sell">买/卖</Label>
-                      <Select value={passiveGtcLimitBuySell} onValueChange={(value: "buy" | "sell") => setPassiveGtcLimitBuySell(value)}>
-                        <SelectTrigger id="passive-gtc-limit-buy-sell">
-                          <SelectValue placeholder="买/卖" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="buy">买入</SelectItem>
-                          <SelectItem value="sell">卖出</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 items-end">
-                      <div className="grid gap-1">
-                        <Label htmlFor="passive-gtc-limit-level">OrderBook Level</Label>
-                        <Select value={passiveGtcLimitLevel} onValueChange={setPassiveGtcLimitLevel}>
-                          <SelectTrigger id="passive-gtc-limit-level">
-                            <SelectValue placeholder="等级" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 10 }, (_, i) => (
-                              <SelectItem key={i + 1} value={String(i + 1)}>
-                                {i + 1}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-1">
-                        <Label htmlFor="passive-gtc-limit-price">价格</Label>
-                        <Input
-                          id="passive-gtc-limit-price"
-                          type="number"
-                          step="0.000001"
-                          value={passiveGtcLimitPrice}
-                          onChange={(e) => setPassiveGtcLimitPrice(Number.parseFloat(e.target.value))}
-                          placeholder="价格"
-                        />
-                      </div>
-                    </div>
+                <Card className="border border-border rounded-lg p-3 shadow-sm bg-card">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="text-sm font-semibold text-foreground whitespace-nowrap">GTC LIMIT</div>
+                    <Input
+                      id="passive-gtc-limit-size"
+                      type="number"
+                      step="0.01"
+                      value={passiveGtcLimitSize}
+                      onChange={(e) => setPassiveGtcLimitSize(Number.parseFloat(e.target.value))}
+                      placeholder="数量"
+                      className="flex-1 min-w-0"
+                    />
+                    <Select value={passiveGtcLimitBuySell} onValueChange={(value: "buy" | "sell") => setPassiveGtcLimitBuySell(value)}>
+                      <SelectTrigger className="flex-1 min-w-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="buy">买入</SelectItem>
+                        <SelectItem value="sell">卖出</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={passiveGtcLimitLevel} onValueChange={setPassiveGtcLimitLevel}>
+                      <SelectTrigger className="flex-1 min-w-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 10 }, (_, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>
+                            {i + 1}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       onClick={() =>
                         handlePlacePassiveOrder(
@@ -1289,160 +1231,108 @@ export default function ControlCenterPage() {
                           passiveGtcLimitPrice,
                         )
                       }
-                      className="bg-primary text-primary-foreground mt-2"
+                      className="bg-primary text-primary-foreground px-4 py-2 text-sm whitespace-nowrap"
+                      size="sm"
                     >
                       下单
                     </Button>
-                  </CardContent>
+                  </div>
                 </Card>
 
-                {/* IOC LIMIT */}
-                <Card className="border border-border rounded-lg p-4 shadow-sm bg-card">
-                  <CardHeader className="p-0 pb-2">
-                    <CardTitle className="text-base text-center text-muted-foreground py-2 rounded-md">
-                      IOC LIMIT
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 p-0 pt-0">
-                    <div className="grid gap-1">
-                      <Label htmlFor="passive-ioc-limit-size">数量</Label>
+                {/* IOC LIMIT 和 MARKET 在同一行 */}
+                <div className="flex gap-3">
+                  {/* IOC LIMIT */}
+                  <Card className="border border-border rounded-lg p-3 shadow-sm bg-card flex-1">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="text-sm font-semibold text-muted-foreground whitespace-nowrap">IOC LIMIT</div>
                       <Input
                         id="passive-ioc-limit-size"
                         type="number"
                         step="0.01"
                         value={passiveIocLimitSize}
                         onChange={(e) => setPassiveIocLimitSize(Number.parseFloat(e.target.value))}
+                        placeholder="数量"
+                        className="flex-1 min-w-0"
                       />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="passive-ioc-limit-buy-sell">买/卖</Label>
                       <Select value={passiveIocLimitBuySell} onValueChange={(value: "buy" | "sell") => setPassiveIocLimitBuySell(value)}>
-                        <SelectTrigger id="passive-ioc-limit-buy-sell">
-                          <SelectValue placeholder="买/卖" />
+                        <SelectTrigger className="flex-1 min-w-0">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="buy">买入</SelectItem>
                           <SelectItem value="sell">卖出</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Select value={passiveIocLimitLevel} onValueChange={setPassiveIocLimitLevel}>
+                        <SelectTrigger className="flex-1 min-w-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 10 }, (_, i) => (
+                            <SelectItem key={i + 1} value={String(i + 1)}>
+                              {i + 1}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        onClick={() =>
+                          handlePlacePassiveOrder(
+                            "IOC LIMIT",
+                            passiveIocLimitSize,
+                            passiveIocLimitBuySell,
+                            passiveIocLimitLevel,
+                            passiveIocLimitPrice,
+                          )
+                        }
+                        className="bg-primary text-primary-foreground px-4 py-2 text-sm whitespace-nowrap"
+                        size="sm"
+                      >
+                        下单
+                      </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 items-end">
-                      <div className="grid gap-1">
-                        <Label htmlFor="passive-ioc-limit-level">OrderBook Level</Label>
-                        <Select value={passiveIocLimitLevel} onValueChange={setPassiveIocLimitLevel}>
-                          <SelectTrigger id="passive-ioc-limit-level">
-                            <SelectValue placeholder="等级" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 10 }, (_, i) => (
-                              <SelectItem key={i + 1} value={String(i + 1)}>
-                                {i + 1}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-1">
-                        <Label htmlFor="passive-ioc-limit-price">价格</Label>
-                        <Input
-                          id="passive-ioc-limit-price"
-                          type="number"
-                          step="0.000001"
-                          value={passiveIocLimitPrice}
-                          onChange={(e) => setPassiveIocLimitPrice(Number.parseFloat(e.target.value))}
-                          placeholder="价格"
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      onClick={() =>
-                        handlePlacePassiveOrder(
-                          "IOC LIMIT",
-                          passiveIocLimitSize,
-                          passiveIocLimitBuySell,
-                          passiveIocLimitLevel,
-                          passiveIocLimitPrice,
-                        )
-                      }
-                      className="bg-primary text-primary-foreground mt-2"
-                    >
-                      下单
-                    </Button>
-                  </CardContent>
-                </Card>
+                  </Card>
 
-                {/* MARKET */}
-                <Card className="border border-primary rounded-lg p-4 shadow-sm bg-primary/10">
-                  <CardHeader className="p-0 pb-2">
-                    <CardTitle className="text-base text-center text-primary py-2 rounded-md">MARKET</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 p-0 pt-0">
-                    <div className="grid gap-1">
-                      <Label htmlFor="passive-market-size">数量</Label>
+                  {/* MARKET */}
+                  <Card className="border border-primary rounded-lg p-3 shadow-sm bg-primary/10 flex-1">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="text-sm font-semibold text-primary whitespace-nowrap">MARKET</div>
                       <Input
                         id="passive-market-size"
                         type="number"
                         step="0.01"
                         value={passiveMarketSize}
                         onChange={(e) => setPassiveMarketSize(Number.parseFloat(e.target.value))}
+                        placeholder="数量"
+                        className="flex-1 min-w-0"
                       />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="passive-market-buy-sell">买/卖</Label>
                       <Select value={passiveMarketBuySell} onValueChange={(value: "buy" | "sell") => setPassiveMarketBuySell(value)}>
-                        <SelectTrigger id="passive-market-buy-sell">
-                          <SelectValue placeholder="买/卖" />
+                        <SelectTrigger className="flex-1 min-w-0">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="buy">买入</SelectItem>
                           <SelectItem value="sell">卖出</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Button
+                        onClick={() =>
+                          handlePlacePassiveOrder(
+                            "MARKET",
+                            passiveMarketSize,
+                            passiveMarketBuySell,
+                            passiveMarketLevel,
+                            passiveMarketPrice,
+                          )
+                        }
+                        className="bg-primary text-primary-foreground px-4 py-2 text-sm whitespace-nowrap"
+                        size="sm"
+                      >
+                        下单
+                      </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 items-end">
-                      <div className="grid gap-1">
-                        <Label htmlFor="passive-market-level">OrderBook Level</Label>
-                        <Select value={passiveMarketLevel} onValueChange={setPassiveMarketLevel}>
-                          <SelectTrigger id="passive-market-level">
-                            <SelectValue placeholder="等级" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 10 }, (_, i) => (
-                              <SelectItem key={i + 1} value={String(i + 1)}>
-                                {i + 1}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-1">
-                        <Label htmlFor="passive-market-price">价格</Label>
-                        <Input
-                          id="passive-market-price"
-                          type="number"
-                          step="0.000001"
-                          value={passiveMarketPrice}
-                          onChange={(e) => setPassiveMarketPrice(Number.parseFloat(e.target.value))}
-                          placeholder="价格"
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      onClick={() =>
-                        handlePlacePassiveOrder(
-                          "MARKET",
-                          passiveMarketSize,
-                          passiveMarketBuySell,
-                          passiveMarketLevel,
-                          passiveMarketPrice,
-                        )
-                      }
-                      className="bg-primary text-primary-foreground mt-2"
-                    >
-                      下单
-                    </Button>
-                  </CardContent>
-                </Card>
+                  </Card>
+                </div>
               </div>
             </div>
 
@@ -1457,7 +1347,7 @@ export default function ControlCenterPage() {
                   </span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="passive-timed-task-min-size">Size (Min)</Label>
                   <Input
@@ -1480,8 +1370,6 @@ export default function ControlCenterPage() {
                     disabled={isPassiveTimedTaskRunning}
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-4">
                 <div className="grid gap-2">
                   <Label htmlFor="passive-timed-task-min-time">时间 (Min, 秒)</Label>
                   <Input
@@ -1532,65 +1420,67 @@ export default function ControlCenterPage() {
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-2 mt-4">
-                <Label htmlFor="passive-timed-task-max-amount">最大交易量</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="passive-timed-task-max-amount"
-                    type="number"
-                    step="0.01"
-                    value={passiveTimedTaskMaxTradeAmount}
-                    onChange={(e) => setPassiveTimedTaskMaxTradeAmount(Number.parseFloat(e.target.value))}
-                    placeholder="最大交易量"
-                    className="flex-1"
-                    disabled={isPassiveTimedTaskRunning}
-                  />
-                  <div className="flex border border-input rounded-md">
-                    <Button
-                      type="button"
-                      variant={passiveTimedTaskAmountType === "USDT" ? "default" : "ghost"}
-                      onClick={() => setPassiveTimedTaskAmountType("USDT")}
-                      className="rounded-r-none border-r"
-                      size="sm"
+              <div className="flex items-end justify-between gap-4 mt-4">
+                <div className="grid gap-2 flex-1">
+                  <Label htmlFor="passive-timed-task-max-amount">最大交易量</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="passive-timed-task-max-amount"
+                      type="number"
+                      step="0.01"
+                      value={passiveTimedTaskMaxTradeAmount}
+                      onChange={(e) => setPassiveTimedTaskMaxTradeAmount(Number.parseFloat(e.target.value))}
+                      placeholder="最大交易量"
+                      className="flex-1"
                       disabled={isPassiveTimedTaskRunning}
-                    >
-                      USDT
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={passiveTimedTaskAmountType === "TOKEN" ? "default" : "ghost"}
-                      onClick={() => setPassiveTimedTaskAmountType("TOKEN")}
-                      className="rounded-l-none"
-                      size="sm"
-                      disabled={isPassiveTimedTaskRunning}
-                    >
-                      TOKEN
-                    </Button>
+                    />
+                    <div className="flex border border-input rounded-md">
+                      <Button
+                        type="button"
+                        variant={passiveTimedTaskAmountType === "USDT" ? "default" : "ghost"}
+                        onClick={() => setPassiveTimedTaskAmountType("USDT")}
+                        className="rounded-r-none border-r"
+                        size="sm"
+                        disabled={isPassiveTimedTaskRunning}
+                      >
+                        USDT
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={passiveTimedTaskAmountType === "TOKEN" ? "default" : "ghost"}
+                        onClick={() => setPassiveTimedTaskAmountType("TOKEN")}
+                        className="rounded-l-none"
+                        size="sm"
+                        disabled={isPassiveTimedTaskRunning}
+                      >
+                        TOKEN
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex justify-end gap-4 mt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={handlePassiveTimedTaskStop} 
-                  disabled={!isPassiveTimedTaskRunning}
-                  className={`${!isPassiveTimedTaskRunning 
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-                    : 'bg-red-500 text-white border-red-500 hover:bg-red-600'
-                  }`}
-                >
-                  停止
-                </Button>
-                <Button
-                  onClick={handlePassiveTimedTaskStart}
-                  disabled={isPassiveTimedTaskRunning}
-                  className={`${isPassiveTimedTaskRunning 
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-                    : 'bg-green-500 text-white hover:bg-green-600'
-                  }`}
-                >
-                  开启
-                </Button>
+                <div className="flex gap-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={handlePassiveTimedTaskStop} 
+                    disabled={!isPassiveTimedTaskRunning}
+                    className={`${!isPassiveTimedTaskRunning 
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                      : 'bg-red-500 text-white border-red-500 hover:bg-red-600'
+                    }`}
+                  >
+                    停止
+                  </Button>
+                  <Button
+                    onClick={handlePassiveTimedTaskStart}
+                    disabled={isPassiveTimedTaskRunning}
+                    className={`${isPassiveTimedTaskRunning 
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                      : 'bg-green-500 text-white hover:bg-green-600'
+                    }`}
+                  >
+                    开启
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>

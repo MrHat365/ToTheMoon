@@ -30,3 +30,4 @@ MARKETS:
   - id: gateio
     options:
       defaultType: swap
+
